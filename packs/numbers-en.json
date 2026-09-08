@@ -1,0 +1,16 @@
+{
+  "pack_id": "numbers-en-v1",
+  "module_id": "firefighter_spelling",
+  "activity_id": "grandma_rescue",
+  "title": "Number Words",
+  "locale": "en",
+  "skill_tags": ["spelling", "number-words", "a1"],
+  "seconds_per_letter": 5,
+  "items": [
+    { "item_id": "num-one", "word": "one" },
+    { "item_id": "num-two", "word": "two" },
+    { "item_id": "num-three", "word": "three" },
+    { "item_id": "num-four", "word": "four" },
+    { "item_id": "num-five", "word": "five" }
+  ]
+}

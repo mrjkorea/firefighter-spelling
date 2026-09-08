@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#071428" />
+  <title>FIREFIGHTER SPELLING</title>
+  <link rel="stylesheet" href="src/style.css?v=1.6" />
+</head>
+<body>
+  <canvas id="game" tabindex="0"></canvas>
+  <div class="tools" id="tools">
+    <button type="button" id="tools-toggle">WORDS · VOICE</button>
+    <div class="tools-body" id="tools-body" hidden>
+      <p class="row-label">Hear any text (offline Bella / Puck)</p>
+      <div class="voice-row">
+        <button type="button" id="voice-bella" class="voice-btn on">Bella ♀</button>
+        <button type="button" id="voice-puck" class="voice-btn">Puck ♂</button>
+      </div>
+      <input id="any-text" type="text" placeholder="Type anything — turtle, a sentence…" autocomplete="off" />
+      <button type="button" id="speak-any">Hear it</button>
+      <p class="row-label">Your spelling list (one word per line)</p>
+      <textarea id="paste-words" placeholder="cat&#10;dog&#10;school"></textarea>
+      <button type="button" id="apply-words">Use these words</button>
+      <p class="hint" id="tts-status">Offline voices. No internet needed for speech.</p>
+    </div>
+  </div>
+  <p class="sr" id="live-caption" aria-live="polite"></p>
+  <script type="module" src="src/engine.js?v=1.6"></script>
+</body>
+</html>

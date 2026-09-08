@@ -1,0 +1,25 @@
+{
+  "$comment": "Content pack for Firefighter Spelling. Engine fetches this at runtime. See README.md.",
+  "type": "object",
+  "required": ["pack_id", "items"],
+  "properties": {
+    "pack_id": { "type": "string" },
+    "module_id": { "type": "string" },
+    "activity_id": { "type": "string" },
+    "title": { "type": "string" },
+    "locale": { "type": "string" },
+    "skill_tags": { "type": "array", "items": { "type": "string" } },
+    "seconds_per_letter": { "type": "number" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["item_id", "word"],
+        "properties": {
+          "item_id": { "type": "string" },
+          "word": { "type": "string" }
+        }
+      }
+    }
+  }
+}
