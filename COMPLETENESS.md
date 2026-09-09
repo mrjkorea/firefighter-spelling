@@ -57,3 +57,16 @@ Also: engine listed `public/sprites/angel.png` but **there is no angel sprite**.
 - No `sprites/angel.png`. Lose/heaven already draws Grandma + wings in canvas; no gameplay gap.
 - Extra unused Grandma mp3s (`help-me.mp3`, `hurry.mp3`, letter clips under `audio/grandma/`, etc.) are leftover files, not referenced by the engine. Harmless.
 - GitHub Pages cache: after merge to `main`, wait for Pages build; hard-refresh if an old `engine.js` is cached.
+- Browser requests `favicon.ico` (404). Not needed to play.
+
+## Local verification (this run)
+
+Static HEAD of 76 play-path URLs on `python3 -m http.server`: **76/76 HTTP 200**. `public/audio/...` and `public/sprites/...` still 404 as expected.
+
+Playwright on `http://127.0.0.1:8765/`:
+
+- Pack fetch: `packs/numbers-en.json` → 200, `packId` `numbers-en-v1`.
+- All Grandma/narrator mp3s and sprites requested as `audio/...` and `sprites/...` → 200. **Zero** `/public/` hits.
+- Only console 404: `favicon.ico`.
+- Enter starts TAP TO PLAY. Keys 1–5 spelled **ONE** (O/N/E) → win, score 200, record `response: "ONE"`.
+- `how-to-play.html` loads. Phone viewport (390×844) still shows TAP TO PLAY.
