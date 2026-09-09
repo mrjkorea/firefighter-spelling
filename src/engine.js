@@ -34,16 +34,17 @@ const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
 
-const VERSION = "1.6";
+const VERSION = "1.6.1";
+/** GitHub Pages serves files from the repo root (no Vite /public prefix). */
+const AUDIO_ROOT = "audio";
 const SPRITE_URLS = {
-  fireman: "public/sprites/fireman.png",
-  grandma: "public/sprites/grandma.png",
-  hug: "public/sprites/hug.png",
-  angel: "public/sprites/angel.png",
-  truck: "public/sprites/truck.png",
-  helicopter: "public/sprites/helicopter.png",
-  ladder: "public/sprites/ladder.png",
-  flames: "public/sprites/flames.png",
+  fireman: "sprites/fireman.png",
+  grandma: "sprites/grandma.png",
+  hug: "sprites/hug.png",
+  truck: "sprites/truck.png",
+  helicopter: "sprites/helicopter.png",
+  ladder: "sprites/ladder.png",
+  flames: "sprites/flames.png",
 };
 const sprites = {};
 for (const [k, url] of Object.entries(SPRITE_URLS)) {
@@ -209,8 +210,12 @@ const failedNarrator = new Set();
 let grandmaNow = null;
 let narratorNow = null;
 
+function clipUrl(folder, id) {
+  return `${AUDIO_ROOT}/${folder}/${id}.mp3`;
+}
+
 function preloadClip(store, ready, failed, folder, id) {
-  const url = `public/audio/${folder}/${id}.mp3`;
+  const url = clipUrl(folder, id);
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -453,15 +458,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return `public/audio/narrator/letter-${w}.mp3`;
-  if (BAKED_WORDS.has(w)) return `public/audio/narrator/word-${w}.mp3`;
+  if (w.length === 1) return clipUrl("narrator", `letter-${w}`);
+  if (BAKED_WORDS.has(w)) return clipUrl("narrator", `word-${w}`);
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return `public/audio/narrator/letter-${id}.mp3`;
+  return clipUrl("narrator", `letter-${id}`);
 }
 
 function playOfflineTts(text, onEnd) {
