@@ -38,7 +38,7 @@ const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
 
-const VERSION = "1.7";
+const VERSION = "1.8";
 /** GitHub Pages serves files from the repo root (no Vite /public prefix). */
 const AUDIO_ROOT = "audio";
 const SPRITE_URLS = {
@@ -1628,12 +1628,12 @@ function drawBuilding() {
     const gx = b.x + b.w / 2;
     const gy = b.y - 10;
     if (state.phase === "win" || state.hug) {
-      if (!drawImg(sprites.hug, gx - 56, gy - 52, 112, 104)) {
-        drawGrandma(gx + 14, gy, 0.72, false);
+      if (!drawImg(sprites.hug, gx - 78, gy - 88, 156, 145)) {
+        drawGrandma(gx + 16, gy - 18, 1.2, false);
         drawFirefighter(gx - 18, gy + 8, 0.7);
       }
     } else {
-      drawGrandma(gx, gy, 0.78, false);
+      drawGrandma(gx, gy - 22, 1.38, false);
     }
   }
 
@@ -1671,7 +1671,7 @@ function drawBuilding() {
         roundRect(r.x, r.y, r.w, r.h, 6);
         ctx.fill();
       }
-      const fs = Math.min(r.h * 0.78, r.w * 0.88);
+      const fs = Math.min(r.h * 0.56, r.w * 0.62);
       ctx.font = `700 ${fs}px Luckiest Guy, Fredoka, Impact, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -1784,15 +1784,23 @@ function drawHud() {
     ctx.fillText(`${sec}s`, cssW / 2, by + 2);
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#fff8e0";
-  ctx.font = "700 18px Fredoka, sans-serif";
-  if (state.phase === "intro") {
-    ctx.fillStyle = "#ffd43b";
-    ctx.font = "700 28px Luckiest Guy, Fredoka, sans-serif";
-    ctx.fillText("LISTEN", cssW / 2, cssH * 0.17);
-  } else if (state.phase === "play") {
-    ctx.fillText(`Floor ${state.floor + 1} / ${state.floors}  ·  tap the letter`, cssW / 2, cssH * 0.17);
+  if (state.phase === "intro" || state.phase === "play") {
+    const line = state.phase === "intro"
+      ? "LISTEN"
+      : `Floor ${state.floor + 1} of ${state.floors}`;
+    const size = Math.max(28, Math.min(40, cssH * 0.048));
+    const y = cssH - size * 0.72;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `700 ${size}px Luckiest Guy, Fredoka, sans-serif`;
+    ctx.lineWidth = Math.max(5, size * 0.16);
+    ctx.strokeStyle = "#123016";
+    ctx.lineJoin = "round";
+    ctx.strokeText(line, cssW / 2, y);
+    ctx.fillStyle = "#fff36a";
+    ctx.fillText(line, cssW / 2, y);
+    ctx.restore();
   }
 }
 
