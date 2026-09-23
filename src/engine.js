@@ -30,11 +30,15 @@ const COLLAPSE_S = 1.7;
 const PIXEL_CAP = 2;
 const DEFAULT_SEC_PER_LETTER = 5;
 const NARRATOR_RATE = 1.45;
+const GRANDMA_VOL = 0.26;
+const GRANDMA_RATE = 1.12;
+const WORD_VOL = 1;
+const WORD_RATE = 1;
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
 
-const VERSION = "1.6.1";
+const VERSION = "1.7";
 /** GitHub Pages serves files from the repo root (no Vite /public prefix). */
 const AUDIO_ROOT = "audio";
 const SPRITE_URLS = {
@@ -235,6 +239,7 @@ const GRANDMA_HELP = [
   "g-quick",
   "g-come-on",
 ];
+const GRANDMA_HELP_SHORT = ["g-come-on", "g-oh-hurry", "g-you-can"];
 const GRANDMA_CHEER = [
   "g-you-can",
   "g-thats-it",
@@ -275,7 +280,7 @@ function grandmaClipFor(text) {
   return null;
 }
 
-function playReady(store, ready, nowRef, id, rate, failed) {
+function playReady(store, ready, nowRef, id, rate, failed, volume) {
   const a = store[id];
   if (!a || (failed && failed.has(id))) return false;
   try {
@@ -283,12 +288,12 @@ function playReady(store, ready, nowRef, id, rate, failed) {
       nowRef.a.pause();
       nowRef.a.currentTime = 0;
     }
-    const a = store[id];
-    a.pause();
-    a.currentTime = 0;
-    a.playbackRate = rate;
-    a.volume = 1;
-    nowRef.a = a;
+    const clip = store[id];
+    clip.pause();
+    clip.currentTime = 0;
+    clip.playbackRate = rate;
+    clip.volume = volume == null ? 1 : volume;
+    nowRef.a = clip;
     const p = a.play();
     if (p && p.catch) p.catch(() => {});
     return true;
@@ -345,8 +350,8 @@ function pumpGrandma() {
     a.onended = null;
     a.pause();
     a.currentTime = 0;
-    a.playbackRate = 0.92;
-    a.volume = 1;
+    a.playbackRate = GRANDMA_RATE;
+    a.volume = GRANDMA_VOL;
     grandmaNowRef.a = a;
     a.onended = finish;
     const p = a.play();
@@ -401,7 +406,7 @@ function pumpNarrator() {
       a.pause();
       a.currentTime = 0;
       a.playbackRate = item.rate || NARRATOR_RATE;
-      a.volume = 1;
+      a.volume = item.volume == null ? 1 : item.volume;
       narratorNowRef.a = a;
       a.onended = () => {
         const gap = item.gapMs == null ? 280 : item.gapMs;
@@ -416,7 +421,7 @@ function pumpNarrator() {
     playOfflineTts(item.text, () => {
       const gap = item.gapMs == null ? 280 : item.gapMs;
       setTimeout(finish, gap);
-    });
+    }, item.volume);
     return;
   }
   setTimeout(finish, 500);
@@ -469,7 +474,7 @@ function letterAudioUrl(ch) {
   return clipUrl("narrator", `letter-${id}`);
 }
 
-function playOfflineTts(text, onEnd) {
+function playOfflineTts(text, onEnd, volume) {
   const done = typeof onEnd === "function" ? onEnd : () => {};
   const line = String(text || "").trim();
   if (!line) {
@@ -489,6 +494,7 @@ function playOfflineTts(text, onEnd) {
   try {
     const a = new Audio(url);
     a.preload = "auto";
+    a.volume = volume == null ? 1 : volume;
     a.onended = () => done();
     a.onerror = () => done();
     narratorNowRef.a = a;
@@ -503,7 +509,7 @@ function speak(text, opts = {}) {
   caption(text);
   if (!state.audioOn) return;
   const clip = grandmaClipFor(text);
-  if (clip && playReady(grandmaAudio, readyGrandma, grandmaNowRef, clip, 0.92, failedGrandma)) return;
+  if (clip && playReady(grandmaAudio, readyGrandma, grandmaNowRef, clip, GRANDMA_RATE, failedGrandma, GRANDMA_VOL)) return;
   enqueueNarrator({ text, tts: true });
 }
 
@@ -514,6 +520,24 @@ function playGrandmaRotate(list, key) {
   state[key] = i + 1;
   caption(id);
   enqueueGrandma(id);
+}
+
+function announceTargetWord() {
+  stopGrandma();
+  stopNarrator();
+  const w = (state.word || "").toLowerCase();
+  caption((state.word || "").toUpperCase());
+  if (!state.audioOn || !w) return;
+  const baked = BAKED_WORDS.has(w) ? `word-${w}` : null;
+  const say = (gap) => enqueueNarrator({
+    clip: baked,
+    text: w,
+    volume: WORD_VOL,
+    rate: WORD_RATE,
+    gapMs: gap,
+  });
+  say(280);
+  say(200);
 }
 
 function speakSpell() {
@@ -527,6 +551,7 @@ function speakSpell() {
 }
 
 function speakNo() {
+  stopGrandma();
   const w = (state.word || "").toLowerCase();
   const text = `No, no. It is ${w}.`;
   caption(`No, no. It is ${w.toUpperCase()}.`);
@@ -771,7 +796,7 @@ function startWord(index) {
   state.sparks = [];
   layoutWindows();
   state.phase = "intro";
-  playGrandmaRotate(GRANDMA_HELP, "grandmaHelpI");
+  announceTargetWord();
 }
 
 function letterBudgetMs() {
@@ -790,7 +815,6 @@ function beginPlay() {
   state.queuedSlot = null;
   armLetterTimer();
   state.hurryT = 0;
-  speakSpell();
 }
 
 function nextWord() {
@@ -1162,8 +1186,9 @@ function update(dt) {
 
   if (state.phase === "intro") {
     state.introT += dt;
-    if (state.introT > 2.4 && !gmBusy && !gmQ.length) beginPlay();
-    else if (state.introT > 7) beginPlay();
+    const wordDone = !narrBusy && narrQ.length === 0;
+    if (state.introT > 0.35 && wordDone) beginPlay();
+    else if (state.introT > 8) beginPlay();
   }
 
   if (state.phase === "play") {
@@ -1172,9 +1197,9 @@ function update(dt) {
       if (state.timerMs <= 0) loseRound();
     }
     state.hurryT += dt;
-    if (state.hurryT >= 8 && !gmBusy && gmQ.length === 0) {
+    if (state.hurryT >= 16 && !gmBusy && gmQ.length === 0 && !narrBusy && narrQ.length === 0) {
       state.hurryT = 0;
-      playGrandmaRotate(GRANDMA_HELP, "grandmaHelpI");
+      playGrandmaRotate(GRANDMA_HELP_SHORT, "grandmaHelpI");
     }
     if (Math.random() < dt * (5 + state.engulf * 18)) {
       const b = buildingRect();
@@ -1763,7 +1788,9 @@ function drawHud() {
   ctx.fillStyle = "#fff8e0";
   ctx.font = "700 18px Fredoka, sans-serif";
   if (state.phase === "intro") {
-    ctx.fillText("Help Grandma! Listen…", cssW / 2, cssH * 0.17);
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "700 28px Luckiest Guy, Fredoka, sans-serif";
+    ctx.fillText("LISTEN", cssW / 2, cssH * 0.17);
   } else if (state.phase === "play") {
     ctx.fillText(`Floor ${state.floor + 1} / ${state.floors}  ·  tap the letter`, cssW / 2, cssH * 0.17);
   }
