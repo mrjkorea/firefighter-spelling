@@ -34,21 +34,20 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
+const VERSION = "1.8";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
 
-const VERSION = "1.8";
-/** GitHub Pages serves files from the repo root (no Vite /public prefix). */
-const AUDIO_ROOT = "audio";
 const SPRITE_URLS = {
-  fireman: "sprites/fireman.png",
-  grandma: "sprites/grandma.png",
-  hug: "sprites/hug.png",
-  truck: "sprites/truck.png",
-  helicopter: "sprites/helicopter.png",
-  ladder: "sprites/ladder.png",
-  flames: "sprites/flames.png",
+  fireman: "public/sprites/fireman.png",
+  grandma: "public/sprites/grandma.png",
+  hug: "public/sprites/hug.png",
+  angel: "public/sprites/angel.png",
+  truck: "public/sprites/truck.png",
+  helicopter: "public/sprites/helicopter.png",
+  ladder: "public/sprites/ladder.png",
+  flames: "public/sprites/flames.png",
 };
 const sprites = {};
 for (const [k, url] of Object.entries(SPRITE_URLS)) {
@@ -65,7 +64,7 @@ function drawImg(img, x, y, w, h) {
   return false;
 }
 const params = new URLSearchParams(location.search);
-const studentId = params.get("student") || "Guest";
+let studentId = "";
 const packUrl = params.get("pack") || DEFAULT_PACK_URL;
 const packIdHint = params.get("packid") || "demo10";
 const sessionId =
@@ -176,6 +175,7 @@ function saveRecord(rec) {
 }
 
 function recordDay1(fields) {
+  if (!studentId) return;
   const ended = new Date().toISOString();
   const started = state.roundStartedAt || ended;
   const latency = Math.max(0, Date.parse(ended) - Date.parse(started));
@@ -214,12 +214,8 @@ const failedNarrator = new Set();
 let grandmaNow = null;
 let narratorNow = null;
 
-function clipUrl(folder, id) {
-  return `${AUDIO_ROOT}/${folder}/${id}.mp3`;
-}
-
 function preloadClip(store, ready, failed, folder, id) {
-  const url = clipUrl(folder, id);
+  const url = `public/audio/${folder}/${id}.mp3`;
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -463,15 +459,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return clipUrl("narrator", `letter-${w}`);
-  if (BAKED_WORDS.has(w)) return clipUrl("narrator", `word-${w}`);
+  if (w.length === 1) return `public/audio/narrator/letter-${w}.mp3`;
+  if (BAKED_WORDS.has(w)) return `public/audio/narrator/word-${w}.mp3`;
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return clipUrl("narrator", `letter-${id}`);
+  return `public/audio/narrator/letter-${id}.mp3`;
 }
 
 function playOfflineTts(text, onEnd, volume) {
@@ -1996,7 +1992,7 @@ window.FirefighterSpelling = {
   },
 };
 
-(async function boot() {
+async function boot() {
   state.phase = "boot";
   try {
     const savedVoice = localStorage.getItem(VOICE_KEY);
@@ -2024,4 +2020,13 @@ window.FirefighterSpelling = {
   caption("Tap to play.");
   canvas.focus();
   requestAnimationFrame(frame);
-})();
+}
+
+window.addEventListener("mrj-auth-ready", (event) => {
+  const id = event && event.detail && event.detail.id != null
+    ? String(event.detail.id).trim()
+    : "";
+  if (!id || studentId) return;
+  studentId = id;
+  boot();
+});
