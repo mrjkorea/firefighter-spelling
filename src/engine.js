@@ -34,7 +34,7 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
-const VERSION = "1.8";
+const VERSION = "1.9";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
@@ -967,18 +967,43 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
+function grandmaHang(b) {
+  const wide = cssW >= 820;
+  const scale = wide ? 3.45 : Math.min(1.65, Math.max(1.25, (cssW * 0.28) / 70));
+  const w = 70 * scale;
+  const h = 98 * scale;
+  const right = b.x - 8;
+  const x = Math.max(w / 2 + 4, right - w / 2);
+  const topLimit = 56;
+  const y = Math.max(topLimit + h * 0.7, b.y + Math.min(28, b.h * 0.08));
+  return { x, y, scale, w, h };
+}
+
 function buildingRect() {
   const floors = Math.max(1, state.floors || 3);
-  const top = cssH * 0.08;
-  const bottom = cssH * 0.90;
-  const avail = Math.max(300, bottom - top);
-  const floorH = Math.max(56, Math.min(128, (avail - 20) / floors));
-  const bh = floorH * floors + 22;
-  const leftGutter = Math.max(56, cssW * 0.13);
-  const bw = Math.min(cssW - leftGutter - 10, cssW * 0.84);
-  const x = leftGutter;
-  const y = bottom - bh;
-  return { x, y, w: bw, h: bh, floorH };
+  const wide = cssW >= 820;
+  const gScale = wide ? 3.45 : Math.min(1.65, Math.max(1.25, (cssW * 0.28) / 70));
+  const gW = 70 * gScale;
+  const leftLane = wide
+    ? Math.max(gW + 22, Math.min(cssW * 0.26, 390))
+    : gW + 12;
+  const rightPad = wide ? 56 : 14;
+  const topLimit = 62;
+  const bottom = Math.min(cssH * 0.88, cssH - 44);
+  const roof = 36;
+  const maxBh = Math.max(140, bottom - topLimit - roof);
+  let floorH = Math.min(wide ? 92 : 108, (maxBh - 14) / floors);
+  floorH = Math.max(36, floorH);
+  let bh = floorH * floors + 14;
+  if (bh > maxBh) {
+    floorH = Math.max(32, (maxBh - 14) / floors);
+    bh = floorH * floors + 14;
+  }
+  const maxBw = Math.max(220, cssW - leftLane - rightPad);
+  const bw = wide ? Math.min(maxBw, 760) : maxBw;
+  const x = leftLane;
+  const y = Math.max(topLimit + roof, bottom - bh);
+  return { x, y, w: bw, h: bh, floorH, wide };
 }
 
 function windowHit(floorIndex) {
@@ -986,7 +1011,7 @@ function windowHit(floorIndex) {
   const floors = Math.max(1, state.floors);
   const floorH = b.floorH || b.h / Math.max(1, floors);
   const gy = b.y + b.h - (floorIndex + 1) * floorH;
-  const pad = 5;
+  const pad = 3;
   const ww = (b.w - pad * (WINDOWS + 1)) / WINDOWS;
   const wh = Math.min(floorH * 0.88, ww * 1.28);
   const wy = gy + (floorH - wh) * 0.35;
@@ -1322,7 +1347,7 @@ function drawGround() {
   ctx.fillRect(0, cssH * 0.86, cssW, cssH * 0.14);
   ctx.fillStyle = "#246f32";
   ctx.fillRect(0, cssH * 0.86, cssW, 10);
-  const tx = state.phase === "truck" || state.phase === "tap" ? state.truckX : 8;
+  const tx = state.phase === "truck" || state.phase === "tap" ? state.truckX : Math.max(8, cssW - 300);
   const ty = cssH * 0.72;
   const tw = 280;
   const th = 118;
@@ -1508,7 +1533,7 @@ function drawLadderToWindow() {
   if (!win) return;
   const b = buildingRect();
   const groundY = cssH * 0.88;
-  const groundX = Math.max(18, b.x - 36);
+  const groundX = b.x + 22;
   const topY = win.y + win.h * 0.55;
   const topX = win.x - 4;
   const t = state.phase === "play" || state.phase === "intro" ? Math.max(0.35, state.ladderT || 0.4) : 0.25;
@@ -1629,7 +1654,8 @@ function drawBuilding() {
         drawFirefighter(gx - 18, gy + 8, 0.7);
       }
     } else {
-      drawGrandma(gx, gy - 22, 1.38, false);
+      const hang = grandmaHang(b);
+      drawGrandma(hang.x, hang.y, hang.scale, false);
     }
   }
 
@@ -1643,7 +1669,7 @@ function drawBuilding() {
     const topY = mid ? mid.y + mid.h * 0.7 : groundY;
     const p = state.climbing ? state.climbT : 0.05;
     const climbY = groundY + (topY - groundY) * p;
-    const fx = Math.max(28, b.x - 34);
+    const fx = b.x + 24;
     drawFirefighter(fx, climbY, 0.72);
   }
 
@@ -1667,13 +1693,19 @@ function drawBuilding() {
         roundRect(r.x, r.y, r.w, r.h, 6);
         ctx.fill();
       }
-      const fs = Math.min(r.h * 0.56, r.w * 0.62);
+      const fs = Math.min(r.h * 0.40, r.w * 0.44, cssW >= 820 ? 38 : 46);
+      ctx.save();
+      ctx.translate(r.x + r.w / 2, r.y + r.h * 0.42);
+      ctx.scale(0.78, 1);
       ctx.font = `700 ${fs}px Luckiest Guy, Fredoka, Impact, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = climbed ? "#c44536" : "#fff8e8";
-      ctx.fillText(cell.ch, r.x + r.w / 2, r.y + r.h * 0.46);
-      drawFace(r.x + r.w / 2, r.y + r.h * 0.82, r.w, cell.face, state.t0 + i);
+      ctx.fillText(cell.ch, 0, 0);
+      ctx.restore();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      drawFace(r.x + r.w / 2, r.y + r.h * 0.76, Math.min(r.w * 0.38, r.h * 0.30), cell.face, state.t0 + i);
     }
     if (climbed || (state.phase === "play" && state.floor === f) || state.phase === "intro") {
       /* ladder marks */
