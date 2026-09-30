@@ -34,7 +34,7 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
-const VERSION = "1.9";
+const VERSION = "1.10";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
@@ -215,7 +215,7 @@ let grandmaNow = null;
 let narratorNow = null;
 
 function preloadClip(store, ready, failed, folder, id) {
-  const url = `public/audio/${folder}/${id}.mp3`;
+  const url = `audio/${folder}/${id}.mp3?v=1.10`;
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -459,15 +459,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return `public/audio/narrator/letter-${w}.mp3`;
-  if (BAKED_WORDS.has(w)) return `public/audio/narrator/word-${w}.mp3`;
+  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.10`;
+  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.10`;
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return `public/audio/narrator/letter-${id}.mp3`;
+  return `audio/narrator/letter-${id}.mp3?v=1.10`;
 }
 
 function playOfflineTts(text, onEnd, volume) {
@@ -846,10 +846,29 @@ function skipWord() {
   nextWord();
 }
 
+function unlockVoice() {
+  const clips = Object.values(narratorAudio).concat(Object.values(grandmaAudio));
+  for (const a of clips) {
+    if (!a) continue;
+    try {
+      const vol = a.volume;
+      a.volume = 0;
+      const p = a.play();
+      const done = () => {
+        try { a.pause(); a.currentTime = 0; } catch { /* ignore */ }
+        a.volume = vol == null ? 1 : vol;
+      };
+      if (p && p.then) p.then(done).catch(() => {});
+      else done();
+    } catch { /* ignore */ }
+  }
+}
+
 function tapToPlay() {
   state.audioOn = true;
   ensureAudio();
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  unlockVoice();
   state.phase = "truck";
   state.truckX = -320;
   state.truckT = 0;
