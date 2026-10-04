@@ -65,6 +65,10 @@ function drawImg(img, x, y, w, h) {
 }
 const params = new URLSearchParams(location.search);
 let studentId = "";
+const PROGRAM = "firefighter-spelling";
+let authProgress = [];
+let ignoreProgress = false;
+const localPassed = new Set();
 const packUrl = params.get("pack") || DEFAULT_PACK_URL;
 const packIdHint = params.get("packid") || "demo10";
 const sessionId =
@@ -813,20 +817,81 @@ function beginPlay() {
   state.hurryT = 0;
 }
 
+function itemPassed(row) {
+  const raw = row.scoreValue != null ? row.scoreValue : row.score != null ? row.score : row.scorePct;
+  const num = typeof raw === "number" ? raw : parseFloat(String(raw == null ? "" : raw).split("/")[0]);
+  const max = row.scoreMax != null ? Number(row.scoreMax) : NaN;
+  const pct = row.scorePct != null ? Number(row.scorePct) : NaN;
+  if (Number.isFinite(pct)) return pct >= 100;
+  if (Number.isFinite(max) && max > 0 && Number.isFinite(num)) return num >= max;
+  return Number.isFinite(num) && num > 0;
+}
+
+function passedItemIds() {
+  const ids = new Set(localPassed);
+  if (ignoreProgress) return ids;
+  const latest = new Map();
+  const rows = Array.isArray(authProgress) ? authProgress : [];
+  for (const row of rows) {
+    if (!row) continue;
+    const prog = String(row.program || row.curriculum_program || "").trim();
+    if (prog !== PROGRAM) continue;
+    const item = String(row.itemId || row.item_id || row.item || "").trim();
+    if (!item) continue;
+    latest.set(item, itemPassed(row));
+  }
+  for (const [id, ok] of latest) if (ok) ids.add(id);
+  return ids;
+}
+
+function nextOpenIndex(from) {
+  const items = (state.pack && state.pack.items) || [];
+  const done = passedItemIds();
+  for (let i = from; i < items.length; i++) {
+    if (!done.has(items[i].item_id)) return i;
+  }
+  return -1;
+}
+
+function postRoundScore(passed) {
+  let student = "";
+  try {
+    student = window.MRJ_AUTH && window.MRJ_AUTH.student ? window.MRJ_AUTH.student() : "";
+  } catch {
+    student = "";
+  }
+  student = String(student || "").trim();
+  if (!student || !state.itemId || !window.MRJ_SCORES || typeof window.MRJ_SCORES.post !== "function") return;
+  window.MRJ_SCORES.post({
+    student,
+    program: PROGRAM,
+    itemId: state.itemId,
+    scoreValue: passed ? 1 : 0,
+    scoreMax: 1,
+  });
+}
+
+function finishPack() {
+  state.phase = "results";
+  caption(`Done. Score ${state.score}.`);
+  speak("Great job! Tap play again.");
+}
+
 function nextWord() {
   const n = state.pack && state.pack.items ? state.pack.items.length : 0;
-  if (!n || state.itemIndex >= n - 1) {
-    state.phase = "results";
-    caption(`Done. Score ${state.score}.`);
-    speak("Great job! Tap play again.");
+  const nxt = nextOpenIndex(state.itemIndex + 1);
+  if (!n || nxt < 0) {
+    finishPack();
     return;
   }
-  startWord(state.itemIndex + 1);
+  startWord(nxt);
 }
 
 function playAgain() {
   stopNarrator();
   stopGrandma();
+  ignoreProgress = true;
+  localPassed.clear();
   state.score = 0;
   state.rescued = 0;
   state.burned = 0;
@@ -918,6 +983,8 @@ function winRound() {
   sfxWin();
   enqueueGrandma("g-thank-you");
   recordDay1({ result: "win", won: true, correct: 1 });
+  if (state.itemId) localPassed.add(state.itemId);
+  postRoundScore(true);
 }
 
 function loseRound() {
@@ -941,6 +1008,7 @@ function loseRound() {
     spawnSparks(rand(0, cssW), rand(0, cssH), 2, "#ff6a1a");
   }
   recordDay1({ result: "lose", won: false, correct: 0 });
+  postRoundScore(false);
 }
 
 function tapWindow(slot) {
@@ -1274,7 +1342,11 @@ function update(dt) {
     state.truckT += dt;
     state.truckX = Math.min(28, -320 + state.truckT * 220);
     if (state.truckT < 2.4 && Math.floor(state.t0 * 9) !== Math.floor((state.t0 - dt) * 9)) sfxSiren();
-    if (state.truckT > 2.8) startWord(0);
+    if (state.truckT > 2.8) {
+      const nxt = nextOpenIndex(0);
+      if (nxt < 0) finishPack();
+      else startWord(nxt);
+    }
   }
 
   if (state.climbing && state.phase === "play") {
@@ -2074,9 +2146,9 @@ async function boot() {
 }
 
 window.addEventListener("mrj-auth-ready", (event) => {
-  const id = event && event.detail && event.detail.id != null
-    ? String(event.detail.id).trim()
-    : "";
+  const detail = event && event.detail ? event.detail : {};
+  const id = detail.id != null ? String(detail.id).trim() : "";
+  authProgress = Array.isArray(detail.progress) ? detail.progress : [];
   if (!id || studentId) return;
   studentId = id;
   boot();
