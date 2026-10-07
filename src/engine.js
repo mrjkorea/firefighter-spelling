@@ -44,7 +44,7 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
-const VERSION = "1.11";
+const VERSION = "1.12";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
@@ -242,7 +242,7 @@ let grandmaNow = null;
 let narratorNow = null;
 
 function preloadClip(store, ready, failed, folder, id) {
-  const url = `audio/${folder}/${id}.mp3?v=1.11`;
+  const url = `audio/${folder}/${id}.mp3?v=1.12`;
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -486,15 +486,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.11`;
-  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.11`;
+  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.12`;
+  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.12`;
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return `audio/narrator/letter-${id}.mp3?v=1.11`;
+  return `audio/narrator/letter-${id}.mp3?v=1.12`;
 }
 
 function playOfflineTts(text, onEnd, volume) {
@@ -2078,6 +2078,14 @@ function drawSparks() {
   ctx.globalAlpha = 1;
 }
 
+let animationLoopStarted = false;
+
+function startAnimationLoop() {
+  if (animationLoopStarted) return;
+  animationLoopStarted = true;
+  requestAnimationFrame(frame);
+}
+
 function frame(ts) {
   const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0.016;
   lastTs = ts;
@@ -2147,7 +2155,7 @@ async function boot() {
   state.phase = "tap";
   caption("Tap to play.");
   canvas.focus();
-  requestAnimationFrame(frame);
+  startAnimationLoop();
 }
 
 const authProgressBinding = bindAuthProgress({

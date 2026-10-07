@@ -238,6 +238,8 @@ export function bindAuthProgress(opts) {
       progressRetryTimer = null;
     }
 
+    if (studentChanged) onStudentReady(id);
+
     const initial = Array.isArray(detail.progress) ? detail.progress : [];
     applyRows(initial);
 
@@ -261,8 +263,6 @@ export function bindAuthProgress(opts) {
         })
         .catch(() => scheduleProgressRetry());
     }
-
-    if (studentChanged) onStudentReady(id);
   }
 
   return { onAuthReady, scheduleProgressRetry, loadPagedProgress };

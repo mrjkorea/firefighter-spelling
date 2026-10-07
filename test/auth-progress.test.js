@@ -87,6 +87,29 @@ describe("bindAuthProgress", () => {
     assert.ok(!allIds.has("skip"));
   });
 
+  it("keeps ready progress on first sign-in when loadProgressForApp fails", async () => {
+    const readyRows = [];
+    for (let i = 0; i < 5; i++) {
+      readyRows.push({ program: PROGRAM, itemId: `w${i}`, scoreValue: 1, scoreMax: 1 });
+    }
+    let authProgress = [];
+    const binding = bindAuthProgress({
+      getAuth: () => ({
+        progressError: () => "",
+        loadProgressForApp: () => Promise.resolve({ ok: false, progress: [] }),
+      }),
+      onStudentReady() {
+        authProgress = [];
+      },
+      onProgressApplied(rows) {
+        authProgress = mergeProgressRows(authProgress, rows, PROGRAM);
+      },
+    });
+    binding.onAuthReady({ detail: { id: "newkid", progress: readyRows } });
+    await new Promise((r) => setTimeout(r, 15));
+    assert.equal(authProgress.length, 5);
+  });
+
   it("merges a second ready event without calling onStudentReady again", () => {
     let readyCount = 0;
     let authProgress = [];
