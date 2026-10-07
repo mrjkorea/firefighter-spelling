@@ -2,6 +2,17 @@
  * Firefighter Spelling — canvas engine (ES module).
  * Loaded by index.html as <script type="module" src="src/engine.js">
  */
+import {
+  PROGRAM,
+  bindAuthProgress,
+  customWordsStorageKey,
+  mergeProgressRows,
+  migrateCustomWordsStorage,
+  migrateRecordsStorage,
+  passedIdsFromProgress,
+  recordsStorageKey,
+} from "./auth-progress.js";
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const captionEl = document.getElementById("live-caption");
@@ -16,8 +27,6 @@ const voicePuckBtn = document.getElementById("voice-puck");
 const ttsStatusEl = document.getElementById("tts-status");
 
 const API = "1.6.0";
-const STORAGE_KEY = "mrj.firefighter_spelling.records";
-const CUSTOM_KEY = "mrj.firefighter_spelling.custom_words";
 const VOICE_KEY = "mrj.firefighter_spelling.tts_gender";
 const DEFAULT_PACK_URL = "packs/numbers-en.json";
 const WORDS_TXT_URL = "packs/words.txt";
@@ -34,7 +43,7 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
-const VERSION = "1.10";
+const VERSION = "1.11";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
@@ -65,7 +74,6 @@ function drawImg(img, x, y, w, h) {
 }
 const params = new URLSearchParams(location.search);
 let studentId = "";
-const PROGRAM = "firefighter-spelling";
 let authProgress = [];
 let ignoreProgress = false;
 const localPassed = new Set();
@@ -159,23 +167,37 @@ function nowDay() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function recordsKey() {
+  return recordsStorageKey(studentId);
+}
+
+function customKey() {
+  return customWordsStorageKey(studentId);
+}
+
 function loadRecords() {
+  if (!studentId) return [];
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(recordsKey()) || "[]");
   } catch {
     return [];
   }
 }
 
 function saveRecord(rec) {
+  if (!studentId) return;
   const all = loadRecords();
   all.push(rec);
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    localStorage.setItem(recordsKey(), JSON.stringify(all));
   } catch {
     /* quota */
   }
   state.lastRecord = rec;
+}
+
+function applyAuthProgressRows(rows) {
+  authProgress = mergeProgressRows(authProgress, rows, PROGRAM);
 }
 
 function recordDay1(fields) {
@@ -219,7 +241,7 @@ let grandmaNow = null;
 let narratorNow = null;
 
 function preloadClip(store, ready, failed, folder, id) {
-  const url = `audio/${folder}/${id}.mp3?v=1.10`;
+  const url = `audio/${folder}/${id}.mp3?v=1.11`;
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -463,15 +485,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.10`;
-  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.10`;
+  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.11`;
+  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.11`;
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return `audio/narrator/letter-${id}.mp3?v=1.10`;
+  return `audio/narrator/letter-${id}.mp3?v=1.11`;
 }
 
 function playOfflineTts(text, onEnd, volume) {
@@ -817,30 +839,10 @@ function beginPlay() {
   state.hurryT = 0;
 }
 
-function itemPassed(row) {
-  const raw = row.scoreValue != null ? row.scoreValue : row.score != null ? row.score : row.scorePct;
-  const num = typeof raw === "number" ? raw : parseFloat(String(raw == null ? "" : raw).split("/")[0]);
-  const max = row.scoreMax != null ? Number(row.scoreMax) : NaN;
-  const pct = row.scorePct != null ? Number(row.scorePct) : NaN;
-  if (Number.isFinite(pct)) return pct >= 100;
-  if (Number.isFinite(max) && max > 0 && Number.isFinite(num)) return num >= max;
-  return Number.isFinite(num) && num > 0;
-}
-
 function passedItemIds() {
   const ids = new Set(localPassed);
   if (ignoreProgress) return ids;
-  const latest = new Map();
-  const rows = Array.isArray(authProgress) ? authProgress : [];
-  for (const row of rows) {
-    if (!row) continue;
-    const prog = String(row.program || row.curriculum_program || "").trim();
-    if (prog !== PROGRAM) continue;
-    const item = String(row.itemId || row.item_id || row.item || "").trim();
-    if (!item) continue;
-    latest.set(item, itemPassed(row));
-  }
-  for (const [id, ok] of latest) if (ok) ids.add(id);
+  for (const id of passedIdsFromProgress(authProgress, PROGRAM)) ids.add(id);
   return ids;
 }
 
@@ -1260,7 +1262,7 @@ if (applyBtn) {
       caption("Paste one word per line.");
       return;
     }
-    try { localStorage.setItem(CUSTOM_KEY, text); } catch { /* ignore */ }
+    try { localStorage.setItem(customKey(), text); } catch { /* ignore */ }
     state.pack = pack;
     state.packId = pack.pack_id;
     state.score = 0;
@@ -2117,6 +2119,8 @@ window.FirefighterSpelling = {
 
 async function boot() {
   state.phase = "boot";
+  migrateRecordsStorage(localStorage, studentId);
+  const migratedWords = migrateCustomWordsStorage(localStorage, studentId);
   try {
     const savedVoice = localStorage.getItem(VOICE_KEY);
     if (savedVoice) setTtsGender(savedVoice);
@@ -2129,7 +2133,7 @@ async function boot() {
   }
   let pack = null;
   try {
-    const saved = localStorage.getItem(CUSTOM_KEY);
+    const saved = migratedWords || localStorage.getItem(customKey());
     if (saved && pasteEl) {
       pasteEl.value = saved;
       const custom = packFromLines(saved, "custom-paste");
@@ -2145,11 +2149,14 @@ async function boot() {
   requestAnimationFrame(frame);
 }
 
-window.addEventListener("mrj-auth-ready", (event) => {
-  const detail = event && event.detail ? event.detail : {};
-  const id = detail.id != null ? String(detail.id).trim() : "";
-  authProgress = Array.isArray(detail.progress) ? detail.progress : [];
-  if (!id || studentId) return;
-  studentId = id;
-  boot();
+const authProgressBinding = bindAuthProgress({
+  onProgressApplied(rows) {
+    applyAuthProgressRows(rows);
+  },
+  onStudentReady(id) {
+    studentId = id;
+    boot();
+  },
 });
+
+window.addEventListener("mrj-auth-ready", authProgressBinding.onAuthReady);

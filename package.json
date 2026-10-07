@@ -1,0 +1,8 @@
+{
+  "name": "firefighter-spelling",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/auth-progress.test.js"
+  }
+}
