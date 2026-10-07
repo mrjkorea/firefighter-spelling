@@ -86,6 +86,36 @@ describe("bindAuthProgress", () => {
     assert.ok(allIds.has("five"));
     assert.ok(!allIds.has("skip"));
   });
+
+  it("merges a second ready event without calling onStudentReady again", () => {
+    let readyCount = 0;
+    let authProgress = [];
+    const binding = bindAuthProgress({
+      getAuth: () => ({ progressError: () => "" }),
+      onStudentReady() {
+        readyCount += 1;
+      },
+      onProgressApplied(rows) {
+        authProgress = mergeProgressRows(authProgress, rows, PROGRAM);
+      },
+    });
+    binding.onAuthReady({
+      detail: {
+        id: "kid1",
+        progress: [{ program: PROGRAM, itemId: "one", scoreValue: 1, scoreMax: 1 }],
+      },
+    });
+    binding.onAuthReady({
+      detail: {
+        id: "kid1",
+        progress: [{ program: PROGRAM, itemId: "two", scoreValue: 1, scoreMax: 1 }],
+      },
+    });
+    assert.equal(readyCount, 1);
+    const ids = passedIdsFromProgress(authProgress, PROGRAM);
+    assert.ok(ids.has("one"));
+    assert.ok(ids.has("two"));
+  });
 });
 
 describe("migrateRecordsStorage", () => {
@@ -100,5 +130,25 @@ describe("migrateRecordsStorage", () => {
     assert.equal(merged.length, 1);
     assert.ok(store.has("mrj.firefighter_spelling.records.kid1"));
     assert.ok(store.has("mrj.firefighter_spelling.records"));
+  });
+
+  it("does not grow the record list across five reloads", () => {
+    const store = new Map();
+    const storage = {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, v),
+    };
+    const dup = { item_id: "legacy", ended_at: "2026-01-01", started_at: "2026-01-01" };
+    storage.setItem(
+      "mrj.firefighter_spelling.records",
+      JSON.stringify([dup, dup, { item_id: "other", ended_at: "2026-01-02" }])
+    );
+    let size = 0;
+    for (let i = 0; i < 5; i++) {
+      const merged = migrateRecordsStorage(storage, "kid1");
+      if (i === 0) size = merged.length;
+      assert.equal(merged.length, size);
+    }
+    assert.equal(size, 2);
   });
 });

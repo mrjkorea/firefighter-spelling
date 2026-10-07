@@ -19,6 +19,13 @@ export function recordsStorageKey(studentId) {
 
 export const LEGACY_RECORDS_KEY = "mrj.firefighter_spelling.records";
 
+export function recordsMigrationMarkerKey(studentId) {
+  const key = idKey(studentId);
+  return key
+    ? `mrj.firefighter_spelling.records_legacy_migrated.${key}`
+    : "mrj.firefighter_spelling.records_legacy_migrated";
+}
+
 export function customWordsStorageKey(studentId) {
   const key = idKey(studentId);
   return key
@@ -106,21 +113,54 @@ export function readJsonArray(storage, key) {
   }
 }
 
+export function recordFingerprint(rec) {
+  if (!rec || typeof rec !== "object") return "";
+  return JSON.stringify([
+    rec.item_id,
+    rec.ended_at,
+    rec.started_at,
+    rec.session_id,
+    rec.student_id,
+    rec.response,
+  ]);
+}
+
+/** Drop exact duplicate record objects (same fingerprint). */
+export function dedupeRecords(records) {
+  const seen = new Set();
+  const out = [];
+  if (!Array.isArray(records)) return out;
+  for (const rec of records) {
+    const fp = recordFingerprint(rec);
+    if (!fp) {
+      out.push(rec);
+      continue;
+    }
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    out.push(rec);
+  }
+  return out;
+}
+
 /** Read-only merge from legacy key into per-student key (never deletes legacy). */
 export function migrateRecordsStorage(storage, studentId) {
   const targetKey = recordsStorageKey(studentId);
-  const current = readJsonArray(storage, targetKey);
+  const markerKey = recordsMigrationMarkerKey(studentId);
+  const current = dedupeRecords(readJsonArray(storage, targetKey));
+  if (!storage || typeof storage.getItem !== "function") return current;
+  if (storage.getItem(markerKey) === "1") return current;
   const legacy = readJsonArray(storage, LEGACY_RECORDS_KEY);
-  if (!legacy.length) return current;
-  const merged = current.concat(legacy);
+  const merged = legacy.length ? dedupeRecords(current.concat(legacy)) : current;
   try {
     if (typeof storage.setItem === "function") {
-      storage.setItem(targetKey, JSON.stringify(merged));
+      if (legacy.length) storage.setItem(targetKey, JSON.stringify(merged));
+      storage.setItem(markerKey, "1");
     }
   } catch {
     /* quota */
   }
-  return merged;
+  return legacy.length ? merged : current;
 }
 
 export function migrateCustomWordsStorage(storage, studentId) {
@@ -143,7 +183,7 @@ const PROGRESS_RETRY_MS = 20000;
 /**
  * Wire mrj-auth-ready + optional loadProgressForApp (feature-detected).
  * @param {object} opts
- * @param {() => void} opts.onStudentReady - called once with student id (boot game)
+ * @param {(id: string) => void} opts.onStudentReady - boot when student id changes (or first sign-in)
  * @param {(rows: object[]) => void} opts.onProgressApplied - merged rows applied
  * @param {() => object} [opts.getAuth] - default window.MRJ_AUTH
  */
@@ -154,7 +194,7 @@ export function bindAuthProgress(opts) {
     opts.getAuth ||
     (() => (typeof globalThis !== "undefined" ? globalThis.MRJ_AUTH : undefined));
 
-  let studentBound = false;
+  let currentStudentKey = "";
   let progressRetried = false;
   let progressRetryTimer = null;
 
@@ -186,8 +226,17 @@ export function bindAuthProgress(opts) {
   function onAuthReady(event) {
     const detail = event && event.detail ? event.detail : {};
     const id = detail.id != null ? String(detail.id).trim() : "";
-    if (!id || studentBound) return;
-    studentBound = true;
+    if (!id) return;
+
+    const studentKey = idKey(id);
+    const studentChanged = currentStudentKey !== studentKey;
+    if (studentChanged) currentStudentKey = studentKey;
+
+    progressRetried = false;
+    if (progressRetryTimer) {
+      clearTimeout(progressRetryTimer);
+      progressRetryTimer = null;
+    }
 
     const initial = Array.isArray(detail.progress) ? detail.progress : [];
     applyRows(initial);
@@ -213,7 +262,7 @@ export function bindAuthProgress(opts) {
         .catch(() => scheduleProgressRetry());
     }
 
-    onStudentReady(id);
+    if (studentChanged) onStudentReady(id);
   }
 
   return { onAuthReady, scheduleProgressRetry, loadPagedProgress };

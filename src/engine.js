@@ -6,6 +6,7 @@ import {
   PROGRAM,
   bindAuthProgress,
   customWordsStorageKey,
+  idKey,
   mergeProgressRows,
   migrateCustomWordsStorage,
   migrateRecordsStorage,
@@ -2154,8 +2155,15 @@ const authProgressBinding = bindAuthProgress({
     applyAuthProgressRows(rows);
   },
   onStudentReady(id) {
+    const prevKey = idKey(studentId);
+    const nextKey = idKey(id);
     studentId = id;
-    boot();
+    if (prevKey !== nextKey) {
+      authProgress = [];
+      localPassed.clear();
+      ignoreProgress = false;
+      boot();
+    }
   },
 });
 
