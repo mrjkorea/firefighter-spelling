@@ -198,28 +198,37 @@ export function bindAuthProgress(opts) {
   let progressRetried = false;
   let progressRetryTimer = null;
 
+  function isCurrentStudent(forStudentKey) {
+    return !!forStudentKey && forStudentKey === currentStudentKey;
+  }
+
   function applyRows(rows) {
     if (!Array.isArray(rows) || !rows.length) return;
     onProgressApplied(rows);
   }
 
-  async function loadPagedProgress() {
+  async function loadPagedProgress(forStudentKey) {
+    const loadKey = forStudentKey || currentStudentKey;
+    if (!loadKey) return;
     const auth = getAuth();
     if (!auth || typeof auth.loadProgressForApp !== "function") return;
     try {
       const res = await auth.loadProgressForApp(PROGRAM);
+      if (!isCurrentStudent(loadKey)) return;
       if (res && res.ok && Array.isArray(res.progress)) applyRows(res.progress);
     } catch {
       /* keep local */
     }
   }
 
-  function scheduleProgressRetry() {
-    if (progressRetried || progressRetryTimer) return;
+  function scheduleProgressRetry(forStudentKey) {
+    const retryKey = forStudentKey || currentStudentKey;
+    if (!retryKey || progressRetried || progressRetryTimer) return;
     progressRetried = true;
     progressRetryTimer = setTimeout(() => {
       progressRetryTimer = null;
-      void loadPagedProgress();
+      if (!isCurrentStudent(retryKey)) return;
+      void loadPagedProgress(retryKey);
     }, PROGRESS_RETRY_MS);
   }
 
@@ -252,16 +261,21 @@ export function bindAuthProgress(opts) {
     }
 
     if (auth && typeof auth.loadProgressForApp === "function") {
+      const loadKey = studentKey;
       auth
         .loadProgressForApp(PROGRAM)
         .then((res) => {
+          if (!isCurrentStudent(loadKey)) return;
           if (res && res.ok && Array.isArray(res.progress)) {
             applyRows(res.progress);
             return;
           }
-          if (progErr || !res || !res.ok) scheduleProgressRetry();
+          if (progErr || !res || !res.ok) scheduleProgressRetry(loadKey);
         })
-        .catch(() => scheduleProgressRetry());
+        .catch(() => {
+          if (!isCurrentStudent(loadKey)) return;
+          scheduleProgressRetry(loadKey);
+        });
     }
   }
 

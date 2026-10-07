@@ -110,6 +110,68 @@ describe("bindAuthProgress", () => {
     assert.equal(authProgress.length, 5);
   });
 
+  it("ignores a late loadProgressForApp response after another student signs in", async () => {
+    let authProgress = [];
+    let resolveA;
+    let loadCalls = 0;
+    const auth = {
+      progressError: () => "",
+      loadProgressForApp: () => {
+        loadCalls += 1;
+        if (loadCalls === 1) {
+          return new Promise((resolve) => {
+            resolveA = resolve;
+          });
+        }
+        return Promise.resolve({ ok: true, progress: [] });
+      },
+    };
+    const binding = bindAuthProgress({
+      getAuth: () => auth,
+      onStudentReady() {
+        authProgress = [];
+      },
+      onProgressApplied(rows) {
+        authProgress = mergeProgressRows(authProgress, rows, PROGRAM);
+      },
+    });
+    binding.onAuthReady({
+      detail: {
+        id: "studentA",
+        progress: [{ program: PROGRAM, itemId: "a0", scoreValue: 1, scoreMax: 1 }],
+      },
+    });
+    binding.onAuthReady({
+      detail: {
+        id: "studentB",
+        progress: [
+          { program: PROGRAM, itemId: "b0", scoreValue: 1, scoreMax: 1 },
+          { program: PROGRAM, itemId: "b1", scoreValue: 1, scoreMax: 1 },
+        ],
+      },
+    });
+    const beforeLate = passedIdsFromProgress(authProgress, PROGRAM);
+    assert.ok(beforeLate.has("b0"));
+    assert.ok(beforeLate.has("b1"));
+    assert.ok(!beforeLate.has("a0"));
+
+    resolveA({
+      ok: true,
+      progress: [
+        { program: PROGRAM, itemId: "a0", scoreValue: 1, scoreMax: 1 },
+        { program: PROGRAM, itemId: "a1", scoreValue: 1, scoreMax: 1 },
+        { program: PROGRAM, itemId: "a2", scoreValue: 1, scoreMax: 1 },
+      ],
+    });
+    await new Promise((r) => setTimeout(r, 15));
+    const afterLate = passedIdsFromProgress(authProgress, PROGRAM);
+    assert.ok(afterLate.has("b0"));
+    assert.ok(afterLate.has("b1"));
+    assert.ok(!afterLate.has("a0"));
+    assert.ok(!afterLate.has("a1"));
+    assert.ok(!afterLate.has("a2"));
+  });
+
   it("merges a second ready event without calling onStudentReady again", () => {
     let readyCount = 0;
     let authProgress = [];
