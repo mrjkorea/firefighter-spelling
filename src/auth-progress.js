@@ -94,11 +94,23 @@ export function mergeProgressRows(existing, incoming, program = PROGRAM) {
   return Array.from(map.values());
 }
 
-export function passedIdsFromProgress(rows, program = PROGRAM) {
+export function passedIdsFromProgress(rows, program = PROGRAM, packId = "") {
   const ids = new Set();
   const merged = mergeProgressRows([], rows, program);
+  const packPrefix = packId ? `${packId}:` : "";
   for (const row of merged) {
-    if (itemPassed(row)) ids.add(rowItemId(row));
+    if (!itemPassed(row)) continue;
+    const item = rowItemId(row);
+    if (!item || item.startsWith("pack:")) continue;
+    if (packId) {
+      if (item.startsWith(packPrefix)) {
+        ids.add(item.slice(packPrefix.length));
+      } else if (!item.includes(":")) {
+        ids.add(item);
+      }
+      continue;
+    }
+    ids.add(item);
   }
   return ids;
 }

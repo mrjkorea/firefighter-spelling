@@ -13,6 +13,11 @@ import {
   passedIdsFromProgress,
   recordsStorageKey,
 } from "./auth-progress.js";
+import {
+  packFinishPostOptions,
+  signedInStudent,
+  wordRoundPostOptions,
+} from "./score-save.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -44,7 +49,7 @@ const GRANDMA_VOL = 0.26;
 const GRANDMA_RATE = 1.12;
 const WORD_VOL = 1;
 const WORD_RATE = 1;
-const VERSION = "1.13";
+const VERSION = "1.14";
 const TAP_DEBOUNCE_MS = 50;
 const HIT_PAD = 10;
 const SNAP_PX = 28;
@@ -106,6 +111,8 @@ const state = {
   timerMs: 0,
   timerMax: 0,
   score: 0,
+  packRight: 0,
+  packTried: 0,
   lastRecord: null,
   taps: [],
   errors: 0,
@@ -242,7 +249,7 @@ let grandmaNow = null;
 let narratorNow = null;
 
 function preloadClip(store, ready, failed, folder, id) {
-  const url = `audio/${folder}/${id}.mp3?v=1.13`;
+  const url = `audio/${folder}/${id}.mp3?v=1.14`;
   const a = store[id] || new Audio(url);
   store[id] = a;
   a.preload = "auto";
@@ -486,15 +493,15 @@ function startHeavenSpell() {
 function ttsUrl(text, gender) {
   const w = String(text || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!w || w.length > 16) return "";
-  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.13`;
-  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.13`;
+  if (w.length === 1) return `audio/narrator/letter-${w}.mp3?v=1.14`;
+  if (BAKED_WORDS.has(w)) return `audio/narrator/word-${w}.mp3?v=1.14`;
   return "";
 }
 
 function letterAudioUrl(ch) {
   const id = String(ch || "").toLowerCase().replace(/[^a-z]/g, "");
   if (!id) return "";
-  return `audio/narrator/letter-${id}.mp3?v=1.13`;
+  return `audio/narrator/letter-${id}.mp3?v=1.14`;
 }
 
 function playOfflineTts(text, onEnd, volume) {
@@ -843,7 +850,7 @@ function beginPlay() {
 function passedItemIds() {
   const ids = new Set(localPassed);
   if (ignoreProgress) return ids;
-  for (const id of passedIdsFromProgress(authProgress, PROGRAM)) ids.add(id);
+  for (const id of passedIdsFromProgress(authProgress, PROGRAM, state.packId)) ids.add(id);
   return ids;
 }
 
@@ -857,20 +864,25 @@ function nextOpenIndex(from) {
 }
 
 function postRoundScore(passed) {
-  let student = "";
-  try {
-    student = window.MRJ_AUTH && window.MRJ_AUTH.student ? window.MRJ_AUTH.student() : "";
-  } catch {
-    student = "";
+  const student = signedInStudent(
+    () => window.MRJ_AUTH && window.MRJ_AUTH.student && window.MRJ_AUTH.student()
+  );
+  if (!student || !state.itemId || !window.MRJ_SCORES || typeof window.MRJ_SCORES.post !== "function") {
+    return;
   }
-  student = String(student || "").trim();
-  if (!student || !state.itemId || !window.MRJ_SCORES || typeof window.MRJ_SCORES.post !== "function") return;
+  state.packTried += 1;
+  if (passed) state.packRight += 1;
   window.MRJ_SCORES.post({
     student,
-    program: PROGRAM,
-    itemId: state.itemId,
-    scoreValue: passed ? 1 : 0,
-    scoreMax: 1,
+    ...wordRoundPostOptions({
+      program: PROGRAM,
+      packId: state.packId,
+      pack: state.pack,
+      itemId: state.itemId,
+      word: state.word,
+      timerMs: state.timerMs,
+      passed,
+    }),
   });
 }
 
@@ -878,6 +890,28 @@ function finishPack() {
   state.phase = "results";
   caption(`Done. Score ${state.score}.`);
   speak("Great job! Tap play again.");
+  const student = signedInStudent(
+    () => window.MRJ_AUTH && window.MRJ_AUTH.student && window.MRJ_AUTH.student()
+  );
+  if (
+    !student ||
+    state.packTried <= 0 ||
+    !window.MRJ_SCORES ||
+    typeof window.MRJ_SCORES.post !== "function"
+  ) {
+    return;
+  }
+  window.MRJ_SCORES.post({
+    student,
+    ...packFinishPostOptions({
+      program: PROGRAM,
+      packId: state.packId,
+      pack: state.pack,
+      packRight: state.packRight,
+      packTried: state.packTried,
+      score: state.score,
+    }),
+  });
 }
 
 function nextWord() {
@@ -896,6 +930,8 @@ function playAgain() {
   ignoreProgress = true;
   localPassed.clear();
   state.score = 0;
+  state.packRight = 0;
+  state.packTried = 0;
   state.rescued = 0;
   state.burned = 0;
   startWord(0);
@@ -1267,6 +1303,8 @@ if (applyBtn) {
     state.pack = pack;
     state.packId = pack.pack_id;
     state.score = 0;
+    state.packRight = 0;
+    state.packTried = 0;
     state.rescued = 0;
     state.burned = 0;
     if (state.phase === "boot" || state.phase === "tap") {
