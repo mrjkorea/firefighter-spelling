@@ -9,6 +9,19 @@ import {
   itemPassed,
 } from "../src/auth-progress.js";
 
+describe("passedIdsFromProgress pack scope", () => {
+  it("keeps only current pack prefixed ids and bare legacy ids", () => {
+    const rows = [
+      { program: PROGRAM, itemId: "numbers-en-v1:num-one", scoreValue: 1, scoreMax: 1 },
+      { program: PROGRAM, itemId: "num-two", scoreValue: 1, scoreMax: 1 },
+      { program: PROGRAM, itemId: "other:num-three", scoreValue: 1, scoreMax: 1 },
+      { program: PROGRAM, itemId: "pack:numbers-en-v1", scoreValue: 3, scoreMax: 5 },
+    ];
+    const ids = passedIdsFromProgress(rows, PROGRAM, "numbers-en-v1");
+    assert.deepEqual(new Set(["num-one", "num-two"]), ids);
+  });
+});
+
 describe("mergeProgressRows", () => {
   it("ignores rows from other programs", () => {
     const rows = [
