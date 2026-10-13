@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-const BUILD = "1.14";
+const BUILD = "1.15";
 
 describe("cache-bust stamps", () => {
   it("index.html ?v= values match engine VERSION", () => {
