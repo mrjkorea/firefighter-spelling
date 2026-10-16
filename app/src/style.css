@@ -1,0 +1,17 @@
+html, body { background: #0b1033; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.card .badge { font-size: 46px; line-height: 1; }
+.card h1 { line-height: 1.02; color: #c2361b; letter-spacing: .5px; }
+.card .keys { font-size: 14px; opacity: .7; }
+.card .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.go.blue { background: linear-gradient(#5bb8ff, #2d7fd6); border-bottom-color: #1d5aa0; }
+#ff-lose { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); transform: translate(-50%, 0); animation: none; }
+#ff-lose h2 { letter-spacing: 6px; color: #c2361b; }
+.stats { display: flex; justify-content: center; gap: 18px; margin: 8px 0; }
+.stats div { display: flex; flex-direction: column; min-width: 60px; }
+.stats b { font-size: 30px; }
+.stats span { font-size: 13px; opacity: .7; }
+.big { font-size: 22px !important; }
+.stars .dim { opacity: .2; }
+.stars { color: #ffb400; }
+.topbar .pill { font-size: clamp(12px, 2vw, 16px); }
