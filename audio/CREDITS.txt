@@ -1,0 +1,19 @@
+Firefighter Spelling — audio + art credits
+
+Music
+- audio/music-battle-theme-a.mp3: "Battle Theme A" by cynicmusic, CC0 (public domain).
+  https://opengameart.org/content/battle-theme-a  (re-encoded 64 kbps mono)
+
+Sound effects
+- audio/sfx/*.mp3 (pop, whoosh, splash, thud, buzz, chime, sparkle, spray, sizzle, click, fanfare, lose, boom):
+  made for MRJ English with a procedural generator (own work), released CC0.
+- siren, alarm ticks and the combo chime are synthesized live with WebAudio (no files).
+
+Voices
+- audio/grandma/*.mp3, audio/narrator/*.mp3: the game's existing baked voice clips (unchanged).
+  Word Master words play the pack's own baked mp3 (item.audio). No text-to-speech is used.
+
+Art
+- textures/*.webp: the game's existing sprites (sprites/*.png), trimmed and compressed to WebP.
+- Night city, building, ladder, water hose spray, smoke and embers are drawn in code.
+- Font: Fredoka (SIL Open Font License), via @fontsource.
