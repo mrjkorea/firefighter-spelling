@@ -32,17 +32,19 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
 
   // ---------- HUD (DOM) ----------
   const hud = el(`<div class="hud">
-    <div class="topbar"><span class="pill" id="ff-score">★ 0</span><span class="pill" id="ff-word">Word 1/1</span><span class="pill hidden" id="ff-student"></span></div>
+    <div class="topbar"><span class="pill" id="ff-score">★ 0</span><span class="pill" id="ff-word">Word 1/1</span><span class="pill tries" id="ff-tries">❤️❤️ Tries: 2</span><span class="pill hidden" id="ff-student"></span></div>
+    <div class="tries-warn hidden" id="ff-warn">⚠️ Careful! Only 1 try left!</div>
     <div class="combo" id="ff-combo"></div>
     <div class="card" id="ff-start">
       <div class="badge">🚒</div>
       <h1>Firefighter<br/>Spelling</h1>
-      <div class="mrj-h2p" id="mrj-h2p"><h2>HOW TO PLAY</h2><ul class="mrj-h2p-list"><li><span class="ic">👂</span>Listen to the word.</li><li><span class="ic">🔥</span>Spell it: one letter on each floor.</li><li><span class="ic">🪟</span>Pick the window with the next letter.</li><li><span class="ic">👵</span>Spell it fast to save Grandma!</li></ul><div class="mrj-h2p-ctl"><div class="ctl"><b>💻 Computer</b><span>🖱️ Click a window</span><span><kbd>1</kbd>–<kbd>5</kbd> pick a window</span><span><kbd>Enter</kbd> start</span></div><div class="ctl"><b>📱 Touch</b><span>👆 Tap a window</span><span>👆 Tap to start</span></div></div></div>
+      <div class="mrj-h2p" id="mrj-h2p"><h2>HOW TO PLAY</h2><ul class="mrj-h2p-list"><li><span class="ic">👂</span>Listen to the word.</li><li><span class="ic">🔥</span>Spell it: one letter on each floor.</li><li><span class="ic">🪟</span>Pick the window with the next letter.</li><li><span class="ic">👵</span>Spell it fast to save Grandma!</li><li><span class="ic">❤️</span>Only 2 tries per word. 2 wrong letters = the house falls!</li></ul><div class="mrj-h2p-ctl"><div class="ctl"><b>💻 Computer</b><span>🖱️ Click a window</span><span><kbd>1</kbd>–<kbd>5</kbd> pick a window</span><span><kbd>Enter</kbd> start</span></div><div class="ctl"><b>📱 Touch</b><span>👆 Tap a window</span><span>👆 Tap to start</span></div></div></div>
       <button class="go" id="ff-go" type="button">TAP TO PLAY</button>
       ${wm ? "" : `<p class="how"><a href="./how-to-play.html" target="_blank" rel="noopener">How to play</a></p>`}
     </div>
     <div class="card hidden" id="ff-lose"><h2 id="ff-lose-word"></h2><p class="lead">Now you know. Try again!</p>
       <div class="row"><button class="go" id="ff-retry" type="button">TRY AGAIN</button><button class="go blue" id="ff-skip" type="button">SKIP</button></div></div>
+    <div class="card hidden" id="ff-over"><div class="badge">🏚️</div><h2>Grandma didn't make it! 😢</h2><p class="lead">The house fell down. The word was:</p><p class="over-word" id="ff-over-word"></p><button class="go" id="ff-over-again" type="button">PLAY AGAIN</button></div>
     <div class="card hidden" id="ff-end"></div>
     <div class="fade" id="ff-fade"></div>
   </div>`);
@@ -54,6 +56,8 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
   function hudUpdate(bump) {
     $("ff-score").textContent = "★ " + S.score;
     $("ff-word").textContent = `Word ${Math.min(n(), S.itemIndex + 1)}/${n()}`;
+    const tr = $("ff-tries"); const left = S.tries == null ? 2 : S.tries;
+    tr.textContent = `${"❤️".repeat(left)}${"🤍".repeat(2 - left)} Tries: ${left}`; tr.classList.toggle("low", left <= 1);
     if (bump) { const p = $("ff-score"); p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump"); }
   }
   function comboShow() {
@@ -85,7 +89,8 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     const it = S.pack.items[S.itemIndex];
     Object.assign(S, { item: it, word: it.word.toLowerCase(), itemId: it.item_id, floors: it.word.length, floor: 0, queuedSlot: null, letterArmed: false,
       introT: 0, hurryT: 0, slamI: 0, slamT: 0, winT: 0, loseT: 0, heloX: -200, grandmaFly: 0, climbing: false, ladderT: 0, climbT: 0,
-      engulf: 0.12, taps: [], errors: 0, roundStartedAt: new Date().toISOString(), popSlot: -1, popT: 0, wet: [], sprayT: 0 });
+      engulf: 0.12, taps: [], errors: 0, tries: 2, loseKind: "", crumbleT: 0, overShown: false, roundStartedAt: new Date().toISOString(), popSlot: -1, popT: 0, wet: [], sprayT: 0 });
+    show("ff-warn", false);
     armTimer();
     S.rows = layoutFloors(S.word, S.itemIndex);
     S.phase = "intro";
@@ -128,7 +133,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     voice.stop(); voice.stopGrandma(); audio.unlock(); audio.startMusic();
     report.resetForReplay();
     Object.assign(S, { score: 0, rescued: 0, burned: 0, streak: 0, bestStreak: 0 });
-    show("ff-end", false);
+    show("ff-end", false); show("ff-over", false);
     fade(() => startWord(0));
   }
   function tryAgain() { voice.stop(); voice.stopGrandma(); show("ff-lose", false); fade(() => startWord(S.itemIndex)); }
@@ -188,6 +193,23 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     fx.float(stage.w / 2, stage.h * 0.3, `+${pts}`, { color: "#ffe066", size: 54, life: 1.5 });
     hudUpdate(true);
   }
+  // 2nd wrong try: the burning house crumbles, Grandma is lost (cartoon), run over.
+  function houseFalls() {
+    voice.stopGrandma(); voice.stop(); show("ff-warn", false);
+    Object.assign(S, { phase: "lose", loseKind: "tries", loseStage: "crumble", crumbleT: 0, loseT: 0, engulf: 1, letterArmed: false, climbing: false, queuedSlot: null, streak: 0, overShown: false });
+    S.burned += 1; comboShow();
+    audio.play("buzz", { vol: 0.8 }); audio.play("boom", { vol: 1, delay: 0.15 }); audio.play("thud", { vol: 1, delay: 0.55 }); audio.play("boom", { vol: 0.8, rate: 0.6, delay: 0.9 }); audio.play("lose", { vol: 0.8, delay: 1.6 });
+    fx.shake(30); fx.flash("#ff6a1a", 0.45);
+    scene.crumble();
+    record({ result: "lose", won: false, correct: 0, reason: "tries" });
+    report.postRoundScore(S, false);
+    caption("The house fell down. Grandma didn't make it.");
+  }
+  function showOver() {
+    if (S.overShown) return; S.overShown = true; S.phase = "over";
+    $("ff-over-word").textContent = S.word.toUpperCase(); show("ff-over", true);
+    audio.stopMusic(); setTimeout(() => { if (S.phase === "over") { voice.stop(); voice.stopGrandma(); audio.stopAll(); } }, 2500); // run end
+  }
   function loseRound() {
     if (S.phase === "lose") return;
     if (S.climbing || !S.letterArmed) return;
@@ -211,11 +233,18 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     S.popSlot = slot; S.popT = 1; S.popOk = ch === need;
     audio.play("pop", { vol: 0.5 });
     if (ch === need) onCorrect(slot);
-    else { S.errors += 1; onWrong(slot); }
+    else {
+      // a TRY = one wrong window (letter) click. 2 tries per word; the 2nd miss ends the run.
+      S.errors += 1; S.tries = Math.max(0, S.tries - 1); hudUpdate();
+      if (S.tries <= 0) return houseFalls();
+      onWrong(slot);
+      const w = $("ff-warn"); w.classList.remove("hidden", "pop"); void w.offsetWidth; w.classList.add("pop");
+    }
   }
 
   // ---------- input ----------
   $("ff-go").addEventListener("click", tapToPlay);
+  $("ff-over-again").addEventListener("click", () => { audio.unlock(); audio.play("click"); playAgain(); });
   $("ff-retry").addEventListener("click", () => { audio.play("click"); tryAgain(); });
   $("ff-skip").addEventListener("click", () => { audio.play("click"); skipWord(); });
   const keys = { Enter: "enter", " ": "enter", 1: "w0", 2: "w1", 3: "w2", 4: "w3", 5: "w4" };
@@ -226,7 +255,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
       if (a === "enter") {
         if (S.phase === "tap" && n()) tapToPlay();
         else if (S.phase === "lose" && !$("ff-lose").classList.contains("hidden")) tryAgain();
-        else if (S.phase === "results") playAgain();
+        else if (S.phase === "results" || S.phase === "over") playAgain();
         return;
       }
       if (S.phase === "play") tapWindow(Number(a.slice(1)));
@@ -280,7 +309,8 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
       if (S.heloX > stage.w * 0.38) S.grandmaFly += dt;
       if (S.heloX > stage.w + 220) { S.phase = "wait"; nextWord(); }
     }
-    if (S.phase === "lose") {
+    if (S.phase === "lose" && S.loseKind === "tries") { S.crumbleT += dt; if (S.crumbleT >= 3.2) showOver(); }
+    else if (S.phase === "lose") {
       S.loseT += dt;
       if (S.loseStage === "fire" && S.loseT >= HEAVEN_AFTER) { S.loseStage = "collapse"; S.collapseT = 0; audio.play("boom", { rate: 0.6 }); fx.shake(26); }
       if (S.loseStage === "collapse") {
@@ -303,13 +333,13 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
   const mrjHardStop = () => { voice.stop(); voice.stopGrandma(); audio.stopAll(); };
   window.addEventListener("message", (ev) => { const d = ev.data; if (d === "mrj-stop" || (d && d.type === "mrj-stop")) mrjHardStop(); });
   window.addEventListener("pagehide", mrjHardStop);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) mrjHardStop(); else if (S.phase !== "results" && S.phase !== "tap") { audio.unlock(); audio.startMusic(); } });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) mrjHardStop(); else if (S.phase !== "results" && S.phase !== "tap" && S.phase !== "over") { audio.unlock(); audio.startMusic(); } });
   window.FirefighterSpelling = {
     getState() {
       return {
         api: API, version: VERSION, host: wm ? "word-master" : "standalone", packId: S.packId, word: S.word, floor: S.floor, floors: S.floors,
         timerMs: Math.round(S.timerMs), timerMax: Math.round(S.timerMax), letterArmed: !!S.letterArmed, climbing: !!S.climbing,
-        faces: (S.rows[S.floor] || []).slice(), need: (S.word || "").toUpperCase()[S.floor] || "", phase: S.phase, score: S.score,
+        tries: S.tries, loseKind: S.loseKind, crumbleT: S.crumbleT, faces: (S.rows[S.floor] || []).slice(), need: (S.word || "").toUpperCase()[S.floor] || "", phase: S.phase, score: S.score,
         rescued: S.rescued, burned: S.burned, itemIndex: S.itemIndex, items: n(), streak: S.streak, low: stage.low, lastRecord: S.lastRecord,
       };
     },
