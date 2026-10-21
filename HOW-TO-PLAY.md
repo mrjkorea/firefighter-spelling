@@ -16,3 +16,5 @@ Same game on phone, tablet, classroom PC, or laptop.
 Word list: `packs/numbers-en.json` (not hardcoded). Paste-list extra words only speak if a baked mp3 already exists.
 
 Readable page: [how-to-play.html](how-to-play.html)
+
+- **2 tries per word:** each wrong window (letter) is a try. After 1 miss you see a warning. A 2nd miss makes the house fall down, Grandma is lost and the game is over (the right word is shown). Tap PLAY AGAIN to start over.

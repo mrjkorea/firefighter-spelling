@@ -270,6 +270,7 @@ export function createScene(stage, S, fx) {
   }
   function drawGrandma() {
     const gp = grandmaPos();
+    if ((S.phase === "lose" || S.phase === "over") && S.loseKind === "tries") return drawGrandmaLost(gp);
     if (S.phase === "win" || S.phase === "wait" || S.phase === "fly" || S.phase === "results") return drawRescue(gp);
     if (S.phase === "lose" && S.loseStage !== "fire") return;
     const h = gp.s * 1.05, w = h * (228 / 384);
@@ -361,8 +362,51 @@ export function createScene(stage, S, fx) {
     g.lineJoin = "round"; g.lineWidth = size * 0.22; g.strokeStyle = "#1a0f1f"; g.strokeText(line, L.w / 2, y);
     g.fillStyle = S.phase === "intro" ? `rgba(255,243,106,${0.75 + Math.sin(S.t * 6) * 0.25})` : "#fff36a"; g.fillText(line, L.w / 2, y);
   }
+  // ---- 2-tries loss: pseudo-3D crumble (chunks tumble toward/away from the camera) + dust ----
+  const chunks = [], dust = [];
+  function crumble() {
+    chunks.length = 0; dust.length = 0;
+    const { bx, by, bw, bh } = L, cols = 5, rows = 8, cw = bw / cols, ch = bh / rows;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) chunks.push({ x: bx + c * cw + cw / 2, y: by + r * ch + ch / 2, w: cw * 0.96, h: ch * 0.96, vx: -(c - (cols - 1) / 2) * 18 + (Math.random() - 0.5) * 30,
+      vy: -40 - Math.random() * 60, rot: 0, vr: (Math.random() - 0.5) * 5, z: 0, vz: (Math.random() - 0.5) * 0.7, tilt: 0, vt: (Math.random() - 0.5) * 6, delay: (rows - 1 - r) * 0.035 + Math.random() * 0.12, col: Math.random() < 0.3 ? "#6e2a1f" : "#a44a35", win: Math.random() < 0.25 });
+  }
+  function drawCrumble(dt) {
+    const t = S.crumbleT, ground = L.groundY;
+    // dust clouds rolling out from the base
+    if (t < 2.4 && dust.length < (stage.low ? 30 : 70)) for (let i = 0; i < 3; i++) dust.push({ x: L.bx + Math.random() * L.bw, y: ground - Math.random() * 20, r: 20 + Math.random() * 30, vx: (Math.random() - 0.5) * 220, vy: -30 - Math.random() * 60, life: 2.4, max: 2.4 });
+    for (const c of chunks) {
+      if (t < c.delay) { drawChunk(c, 0); continue; }
+      if (t > 2.6) { drawChunk(c, 0); continue; } // settled pile
+      c.vy += 900 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt; c.z = clamp(c.z + c.vz * dt, -0.4, 0.5); c.tilt += c.vt * dt;
+      if (c.y + c.h / 2 > ground) { c.y = ground - c.h / 2; c.vy *= -0.25; c.vx *= 0.6; c.vr *= 0.5; c.vt *= 0.5; }
+      drawChunk(c, 1);
+    }
+    for (let i = dust.length - 1; i >= 0; i--) { const p = dust[i]; p.life -= dt; if (p.life <= 0) { dust.splice(i, 1); continue; } p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.97; p.r += 40 * dt;
+      g.fillStyle = `rgba(190,175,160,${0.55 * p.life / p.max})`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, Math.PI * 2); g.fill(); }
+    if (t > 0.2 && t < 2.6) { // big cartoon text
+      const s = clamp(L.w * 0.07, 26, 56), k = ease.outBack(clamp((t - 0.2) / 0.4, 0, 1));
+      g.save(); g.translate(L.w / 2, L.h * 0.28); g.scale(k, k); g.font = `700 ${s}px ${FONT}`; g.textAlign = "center"; g.textBaseline = "middle";
+      g.lineWidth = 8; g.strokeStyle = "#3a0700"; g.strokeText("CRASH!", 0, 0); g.fillStyle = "#ffd43b"; g.fillText("CRASH!", 0, 0); g.restore();
+    }
+  }
+  function drawChunk(c, live) {
+    const sc = 1 + c.z * 0.35, sq = Math.max(0.15, Math.abs(Math.cos(c.tilt))); // z = toward camera, tilt = 3D flip
+    g.save(); g.translate(c.x, c.y); g.rotate(c.rot); g.scale(sc, sc * sq);
+    const d = 6 * sc; g.fillStyle = "#4a1a12"; g.fillRect(-c.w / 2 + d, -c.h / 2 + d, c.w, c.h); // side/back face
+    g.fillStyle = c.col; g.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+    if (c.win) { g.fillStyle = live ? "#ff9a3c" : "#ffcf6a"; g.fillRect(-c.w * 0.25, -c.h * 0.3, c.w * 0.5, c.h * 0.6); }
+    g.strokeStyle = "rgba(40,10,5,.35)"; g.lineWidth = 1.5; g.strokeRect(-c.w / 2, -c.h / 2, c.w, c.h);
+    g.restore();
+  }
+  function drawGrandmaLost(gp) { // cartoon: Grandma fades away as a little ghost floating up — no injury shown
+    const t = S.crumbleT; if (t > 2.8) return;
+    const h = gp.s * 1.05, w = h * (228 / 384), up = t * 60;
+    g.save(); g.globalAlpha = clamp(1 - t / 2.8, 0, 1) * 0.85; g.translate(gp.x, L.by - 4 - up);
+    if (ok(IMG.grandma)) g.drawImage(IMG.grandma, -w / 2, -h, w, h);
+    g.font = `${h * 0.35}px ${FONT}`; g.textAlign = "center"; g.fillText("💨", w * 0.4, -h * 0.2); g.restore();
+  }
   function drawLose() {
-    if (S.phase !== "lose") return;
+    if (S.phase !== "lose" || S.loseKind === "tries") return;
     if (S.loseStage === "fire" || S.loseStage === "collapse") {
       const k = S.loseStage === "fire" ? clamp(S.loseT / 1.2, 0, 1) : 1;
       g.fillStyle = `rgba(90,10,0,${0.55 * k})`; g.fillRect(0, 0, L.w, L.h);
@@ -414,7 +458,9 @@ export function createScene(stage, S, fx) {
     g.save(); fx.applyShake(g);
     const drop = S.phase === "lose" && S.loseStage === "collapse" ? ease.inOut(clamp(S.collapseT / 1.7, 0, 1)) * L.bh * 0.7 : 0;
     const clearLose = S.phase === "lose" && S.loseStage === "heaven";
-    if (!clearLose) {
+    const crumbling = (S.phase === "lose" || S.phase === "over") && S.loseKind === "tries";
+    if (crumbling) { drawCrumble(dt); drawSmoke(dt); drawTruck(); drawFirefighter(ladderGeom()); drawGrandma(); }
+    else if (!clearLose) {
       drawBuilding(drop);
       drawSmoke(dt);
       const lg = ladderGeom();
@@ -432,5 +478,5 @@ export function createScene(stage, S, fx) {
     drawBanner();
     fx.drawFlash(g, L.w, L.h);
   }
-  return { draw, windowRect, hitWindow, grandmaPos, newWord() { smoke.length = 0; } };
+  return { draw, windowRect, hitWindow, grandmaPos, newWord() { smoke.length = 0; chunks.length = 0; dust.length = 0; }, crumble };
 }
