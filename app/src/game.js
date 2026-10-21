@@ -37,8 +37,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     <div class="card" id="ff-start">
       <div class="badge">🚒</div>
       <h1>Firefighter<br/>Spelling</h1>
-      <p class="lead">Grandma is stuck on the roof! Listen to the word, then tap the windows to spell it, one letter per floor.</p>
-      <p class="keys">Tap a window · keys <b>1–5</b> · <b>Enter</b> starts</p>
+      <div class="mrj-h2p" id="mrj-h2p"><h2>HOW TO PLAY</h2><ul class="mrj-h2p-list"><li><span class="ic">👂</span>Listen to the word.</li><li><span class="ic">🔥</span>Spell it: one letter on each floor.</li><li><span class="ic">🪟</span>Pick the window with the next letter.</li><li><span class="ic">👵</span>Spell it fast to save Grandma!</li></ul><div class="mrj-h2p-ctl"><div class="ctl"><b>💻 Computer</b><span>🖱️ Click a window</span><span><kbd>1</kbd>–<kbd>5</kbd> pick a window</span><span><kbd>Enter</kbd> start</span></div><div class="ctl"><b>📱 Touch</b><span>👆 Tap a window</span><span>👆 Tap to start</span></div></div></div>
       <button class="go" id="ff-go" type="button">TAP TO PLAY</button>
       ${wm ? "" : `<p class="how"><a href="./how-to-play.html" target="_blank" rel="noopener">How to play</a></p>`}
     </div>
@@ -110,6 +109,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
   }
   function results() {
     S.phase = "results";
+    audio.stopMusic(); setTimeout(() => { if (S.phase === "results") { voice.stop(); voice.stopGrandma(); audio.stopAll(); } }, 3500); // run end: music off, then AudioContext suspended
     caption(`Done. Score ${S.score}.`);
     voice.thanks();
     audio.play("fanfare");
@@ -125,7 +125,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     end.querySelector("#ff-again").addEventListener("click", () => { audio.play("click"); playAgain(); });
   }
   function playAgain() {
-    voice.stop(); voice.stopGrandma();
+    voice.stop(); voice.stopGrandma(); audio.unlock(); audio.startMusic();
     report.resetForReplay();
     Object.assign(S, { score: 0, rescued: 0, burned: 0, streak: 0, bestStreak: 0 });
     show("ff-end", false);
@@ -299,6 +299,11 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
 
   stage.run((dt, st) => { update(dt); scene.draw(dt); });
 
+  // Word Master close / tab hidden / page unload: stop all sound
+  const mrjHardStop = () => { voice.stop(); voice.stopGrandma(); audio.stopAll(); };
+  window.addEventListener("message", (ev) => { const d = ev.data; if (d === "mrj-stop" || (d && d.type === "mrj-stop")) mrjHardStop(); });
+  window.addEventListener("pagehide", mrjHardStop);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) mrjHardStop(); else if (S.phase !== "results" && S.phase !== "tap") { audio.unlock(); audio.startMusic(); } });
   window.FirefighterSpelling = {
     getState() {
       return {
