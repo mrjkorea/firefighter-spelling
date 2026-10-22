@@ -7,6 +7,7 @@ import { el, esc, muteButton } from "./kit/ui.js";
 import { WINDOWS, HEAVEN_AFTER, COLLAPSE_S, HURRY_EVERY, layoutFloors, letterBudgetMs, winPoints, recordPoints, nextOpenIndex } from "./rules.js";
 import { createVoice } from "./voice.js";
 import { createScene } from "./scene.js";
+import { isMrjTeacher, onMrjTeacher } from "./mrj-teacher.js";
 
 const API = "1.6.0";
 export const VERSION = "2.0";
@@ -108,7 +109,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
       }
       return startWord(S.itemIndex + 1);
     }
-    const nxt = nextOpenIndex(S.pack.items, S.itemIndex + 1, report.passedIds(S.packId));
+    const nxt = isMrjTeacher() ? S.itemIndex + 1 : nextOpenIndex(S.pack.items, S.itemIndex + 1, report.passedIds(S.packId));
     if (!n() || nxt < 0) { report.finishPack(S); return results(); }
     startWord(nxt);
   }
@@ -235,8 +236,10 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     if (ch === need) onCorrect(slot);
     else {
       // a TRY = one wrong window (letter) click. 2 tries per word; the 2nd miss ends the run.
-      S.errors += 1; S.tries = Math.max(0, S.tries - 1); hudUpdate();
-      if (S.tries <= 0) return houseFalls();
+      if (!isMrjTeacher()) {
+        S.errors += 1; S.tries = Math.max(0, S.tries - 1); hudUpdate();
+        if (S.tries <= 0) return houseFalls();
+      }
       onWrong(slot);
       const w = $("ff-warn"); w.classList.remove("hidden", "pop"); void w.offsetWidth; w.classList.add("pop");
     }
@@ -284,7 +287,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
     }
     if (S.phase === "intro") { S.introT += dt; if ((S.introT > 0.35 && voice.idle()) || S.introT > 8) beginPlay(); }
     if (S.phase === "play") {
-      if (!S.climbing && S.letterArmed) { S.timerMs = Math.max(0, S.timerMs - dt * 1000); if (S.timerMs <= 0) loseRound(); }
+      if (!S.climbing && S.letterArmed && !isMrjTeacher()) { S.timerMs = Math.max(0, S.timerMs - dt * 1000); if (S.timerMs <= 0) loseRound(); }
       const pct = S.timerMs / S.timerMax;
       if (pct < 0.3 && S.letterArmed && !S.climbing && Math.floor(S.timerMs / 500) !== Math.floor((S.timerMs + dt * 1000) / 500)) audio.tone(980, 0.06, { type: "square", vol: 0.05 });
       S.hurryT += dt;
@@ -334,6 +337,7 @@ export async function startGame(host, { pack, wm, report, packIdHint, voiceParam
   window.addEventListener("message", (ev) => { const d = ev.data; if (d === "mrj-stop" || (d && d.type === "mrj-stop")) mrjHardStop(); });
   window.addEventListener("pagehide", mrjHardStop);
   document.addEventListener("visibilitychange", () => { if (document.hidden) mrjHardStop(); else if (S.phase !== "results" && S.phase !== "tap" && S.phase !== "over") { audio.unlock(); audio.startMusic(); } });
+  onMrjTeacher(() => hudUpdate());
   window.FirefighterSpelling = {
     getState() {
       return {

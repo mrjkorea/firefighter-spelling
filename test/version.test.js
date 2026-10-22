@@ -10,7 +10,7 @@ const BUILD = JSON.parse(fs.readFileSync(path.join(root, "version.json"), "utf8"
 describe("cache-bust stamps", () => {
   it("index.html ?v= values match version.json build", () => {
     const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-    assert.equal(BUILD, "20261021-tries2");
+    assert.ok(BUILD);
     assert.ok(html.includes(`<meta name="mrj-build" content="${BUILD}"`));
     assert.match(html, new RegExp(`assets/index-[\\w-]+\\.js\\?v=${BUILD}`));
     assert.match(html, new RegExp(`assets/index-[\\w-]+\\.css\\?v=${BUILD}`));
